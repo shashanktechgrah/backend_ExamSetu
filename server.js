@@ -171,6 +171,12 @@ app.get("/", (req, res) => {
   });
 });
 
+app.get("/api/health", (req, res) => {
+  res.status(200).json({
+    status: "healthy",
+    time: new Date().toISOString()
+  });
+});
 
 // Admin list students (optionally filter by classId)
 app.get('/api/admin/students', async (req, res) => {
@@ -1808,4 +1814,5 @@ process.on('SIGINT', async () => {
 });
 
 module.exports = app;
+
 
