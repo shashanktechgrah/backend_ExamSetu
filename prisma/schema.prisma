@@ -1,0 +1,353 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int           @id @default(autoincrement()) @map("user_id")
+  name         String        @db.VarChar(120)
+  email        String        @unique @db.VarChar(180)
+  passwordHash String        @map("password_hash") @db.VarChar(255)
+  role         Role
+  phone        String?       @db.VarChar(20)
+  status       UserStatus    @default(ACTIVE)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  logs         ActivityLog[]
+  student      Student?
+  teacher      Teacher?
+  testsCreated Test[]        @relation("CreatedTests")
+
+  @@map("users")
+}
+
+model Class {
+  id            Int              @id @default(autoincrement()) @map("class_id")
+  className     String           @map("class_name") @db.VarChar(20)
+  section       String           @default("A") @db.VarChar(10)
+  createdAt     DateTime         @default(now()) @map("created_at")
+  notifications Notification[]
+  questionBank  QuestionBank[]
+  students      Student[]
+  assignments   TestAssignment[]
+  tests         Test[]
+
+  @@unique([className, section])
+  @@map("classes")
+}
+
+model Subject {
+  id           Int            @id @default(autoincrement()) @map("subject_id")
+  subjectName  String         @unique @map("subject_name") @db.VarChar(80)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  questionBank QuestionBank[]
+  tests        Test[]
+
+  @@map("subjects")
+}
+
+model Student {
+  id            Int       @id @default(autoincrement()) @map("student_id")
+  userId        Int       @unique @map("user_id")
+  classId       Int       @map("class_id")
+  rollNo        String?   @map("roll_no") @db.VarChar(30)
+  guardianName  String?   @map("guardian_name") @db.VarChar(120)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  admissionDate DateTime? @map("admission_date") @db.Date
+  dateOfBirth   DateTime? @map("date_of_birth") @db.Date
+  gender        String?   @map("gender") @db.VarChar(10)
+  attempts      Attempt[]
+  class         Class     @relation(fields: [classId], references: [id])
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("students")
+}
+
+model Teacher {
+  id         Int      @id @default(autoincrement()) @map("teacher_id")
+  userId     Int      @unique @map("user_id")
+  department String?  @db.VarChar(80)
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("teachers")
+}
+
+model QuestionSource {
+  id        Int            @id @default(autoincrement()) @map("source_id")
+  board     String?        @db.VarChar(80)
+  paperName String?        @map("paper_name") @db.VarChar(120)
+  year      Int?
+  createdAt DateTime       @default(now()) @map("created_at")
+  questions QuestionBank[]
+
+  @@map("question_sources")
+}
+
+model QuestionBank {
+  id            Int                        @id @default(autoincrement()) @map("qb_question_id")
+  classId       Int                        @map("class_id")
+  subjectId     Int                        @map("subject_id")
+  sourceId      Int?                       @map("source_id")
+  questionText  String                     @map("question_text")
+  questionType  QuestionType               @map("question_type")
+  marks         Decimal                    @default(1.0) @db.Decimal(6, 2)
+  difficulty    Difficulty                 @default(MEDIUM)
+  imageUrl      String?                    @map("image_url")
+  isActive      Boolean                    @default(true) @map("is_active")
+  createdAt     DateTime                   @default(now()) @map("created_at")
+  answers       Answer[]
+  class         Class                      @relation(fields: [classId], references: [id])
+  source        QuestionSource?            @relation(fields: [sourceId], references: [id])
+  subject       Subject                    @relation(fields: [subjectId], references: [id])
+  correctAnswer QuestionBankCorrectAnswer?
+  options       QuestionBankOption[]
+  tags          QuestionTag[]
+  testQuestions TestQuestion[]
+
+  @@index([classId, subjectId], map: "idx_qb_class_subject")
+  @@index([sourceId], map: "idx_qb_source")
+  @@map("question_bank")
+}
+
+model QuestionBankOption {
+  id                Int          @id @default(autoincrement()) @map("qb_option_id")
+  questionId        Int          @map("qb_question_id")
+  optionText        String       @map("option_text")
+  isCorrect         Boolean      @default(false) @map("is_correct")
+  orderNo           Int          @map("order_no")
+  selectedInAnswers Answer[]
+  question          QuestionBank @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, orderNo])
+  @@map("question_bank_options")
+}
+
+model QuestionBankCorrectAnswer {
+  id         Int          @id @default(autoincrement()) @map("qb_answer_id")
+  questionId Int          @unique @map("qb_question_id")
+  correct    String       @map("correct_answer")
+  question   QuestionBank @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("question_bank_correct_answers")
+}
+
+model Tag {
+  id        Int           @id @default(autoincrement()) @map("tag_id")
+  tagName   String        @unique @map("tag_name") @db.VarChar(120)
+  createdAt DateTime      @default(now()) @map("created_at")
+  questions QuestionTag[]
+
+  @@map("tags")
+}
+
+model QuestionTag {
+  questionId Int          @map("qb_question_id")
+  tagId      Int          @map("tag_id")
+  question   QuestionBank @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  tag        Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, tagId])
+  @@map("question_tags")
+}
+
+model Test {
+  id                    Int              @id @default(autoincrement()) @map("test_id")
+  title                 String           @db.VarChar(200)
+  description           String?
+  testType              TestType         @map("test_type")
+  classId               Int              @map("class_id")
+  subjectId             Int              @map("subject_id")
+  createdById           Int?             @map("created_by")
+  totalMarks            Decimal          @default(0.00) @map("total_marks") @db.Decimal(8, 2)
+  durationMin           Int              @map("duration_minutes")
+  startTime             DateTime?        @map("start_time")
+  endTime               DateTime?        @map("end_time")
+  status                TestStatus       @default(DRAFT)
+  negativeMarking       Boolean          @default(false) @map("negative_marking")
+  negativeMarksPerWrong Decimal          @default(0.00) @map("negative_marks_per_wrong") @db.Decimal(6, 2)
+  shuffleQuestions      Boolean          @default(true) @map("shuffle_questions")
+  shuffleOptions        Boolean          @default(true) @map("shuffle_options")
+  passingMarks          Decimal          @default(0.00) @map("passing_marks") @db.Decimal(8, 2)
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+  attempts              Attempt[]
+  mockConfig            MockTestConfig?
+  assignments           TestAssignment[]
+  testQuestions         TestQuestion[]
+  class                 Class            @relation(fields: [classId], references: [id])
+  createdBy             User?            @relation("CreatedTests", fields: [createdById], references: [id])
+  subject               Subject          @relation(fields: [subjectId], references: [id])
+
+  @@index([classId, subjectId, testType], map: "idx_tests_class_subject_type")
+  @@map("tests")
+}
+
+model MockTestConfig {
+  id                Int         @id @default(autoincrement()) @map("mock_config_id")
+  testId            Int         @unique @map("test_id")
+  numberOfQuestions Int         @map("number_of_questions")
+  difficultyFilter  Difficulty? @map("difficulty_filter")
+  yearFrom          Int?        @map("year_from")
+  yearTo            Int?        @map("year_to")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  test              Test        @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@map("mock_test_config")
+}
+
+model TestQuestion {
+  id         Int          @id @default(autoincrement()) @map("test_question_id")
+  testId     Int          @map("test_id")
+  questionId Int          @map("qb_question_id")
+  orderNo    Int          @map("order_no")
+  question   QuestionBank @relation(fields: [questionId], references: [id])
+  test       Test         @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@unique([testId, orderNo])
+  @@unique([testId, questionId])
+  @@index([testId], map: "idx_test_questions_test")
+  @@map("test_questions")
+}
+
+model TestAssignment {
+  id        Int      @id @default(autoincrement()) @map("assignment_id")
+  testId    Int      @map("test_id")
+  classId   Int      @map("class_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  test      Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@unique([testId, classId])
+  @@map("test_assignments")
+}
+
+model Attempt {
+  id                Int           @id @default(autoincrement()) @map("attempt_id")
+  testId            Int           @map("test_id")
+  studentId         Int           @map("student_id")
+  startedAt         DateTime      @default(now()) @map("started_at")
+  submittedAt       DateTime?     @map("submitted_at")
+  status            AttemptStatus @default(STARTED)
+  totalScore        Decimal       @default(0.00) @map("total_score") @db.Decimal(8, 2)
+  percentage        Decimal       @default(0.00) @db.Decimal(6, 2)
+  isResultPublished Boolean       @default(false) @map("is_result_published")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  answers           Answer[]
+  student           Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  test              Test          @relation(fields: [testId], references: [id], onDelete: Cascade)
+  result            Result?
+
+  @@index([studentId], map: "idx_attempts_student")
+  @@map("attempts")
+}
+
+model Answer {
+  id                 Int                 @id @default(autoincrement()) @map("answer_id")
+  attemptId          Int                 @map("attempt_id")
+  questionId         Int                 @map("qb_question_id")
+  selectedOptionId   Int?                @map("selected_option_id")
+  answerText         String?             @map("answer_text")
+  subjectiveImageUrl String?             @map("subjective_image_url")
+  isCorrect          Boolean?            @map("is_correct")
+  marksObtained      Decimal             @default(0.00) @map("marks_obtained") @db.Decimal(6, 2)
+  answeredAt         DateTime            @default(now()) @map("answered_at")
+  similarityScore    Decimal?            @map("similarity_score") @db.Decimal(5, 2)
+  evaluationType     String?             @default("AUTO") @map("evaluation_type") @db.VarChar(20)
+  attempt            Attempt             @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question           QuestionBank        @relation(fields: [questionId], references: [id])
+  selectedOption     QuestionBankOption? @relation(fields: [selectedOptionId], references: [id])
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId], map: "idx_answers_attempt")
+  @@map("answers")
+}
+
+model Result {
+  id            Int          @id @default(autoincrement()) @map("result_id")
+  attemptId     Int          @unique @map("attempt_id")
+  totalMarks    Decimal      @default(0.00) @map("total_marks") @db.Decimal(8, 2)
+  obtainedMarks Decimal      @default(0.00) @map("obtained_marks") @db.Decimal(8, 2)
+  percentage    Decimal      @default(0.00) @db.Decimal(6, 2)
+  published     Boolean      @default(false)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  status        ResultStatus @default(Fail)
+  attempt       Attempt      @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@map("results")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement()) @map("notification_id")
+  title     String   @db.VarChar(200)
+  message   String
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+  classId   Int?     @map("class_id")
+  class     Class?   @relation(fields: [classId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_notifications_class")
+
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id        Int      @id @default(autoincrement()) @map("log_id")
+  userId    Int      @map("user_id")
+  action    String   @db.VarChar(150)
+  module    String   @db.VarChar(80)
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("activity_logs")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum QuestionType {
+  MCQ
+  TRUE_FALSE
+  INTEGER
+  SHORT
+  SUBJECTIVE
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum TestType {
+  MOCK
+  TEACHER_EXAM
+}
+
+enum TestStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum AttemptStatus {
+  STARTED
+  SUBMITTED
+  AUTO_SUBMITTED
+}
+
+enum ResultStatus {
+  Pass
+  Fail
+}
