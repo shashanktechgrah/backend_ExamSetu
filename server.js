@@ -164,6 +164,14 @@ app.post('/api/admin/users', async (req, res) => {
   }
 });
 
+app.get("/", (req, res) => {
+  res.status(200).json({
+    status: "OK",
+    message: "ExamSetu Backend is running"
+  });
+});
+
+
 // Admin list students (optionally filter by classId)
 app.get('/api/admin/students', async (req, res) => {
   try {
@@ -1800,3 +1808,4 @@ process.on('SIGINT', async () => {
 });
 
 module.exports = app;
+
