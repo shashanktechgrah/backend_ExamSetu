@@ -4,26 +4,37 @@ const axios = require('axios');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
- const bcrypt = require('bcrypt');
+const bcrypt = require('bcrypt');
 const fs = require('fs');
 const path = require('path');
 const { PrismaClient } = require('@prisma/client');
 
 const app = express();
 const prisma = new PrismaClient();
-
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://frontendexamsetu-l29okp8v0.vercel.app"
+];
 // Middleware
+app.use(express.json({ limit: '10mb' }));
 app.use(helmet());
 app.use(cors({
-  origin: [
-    "http://localhost:5173",          // local dev (Vite)
-    "https://frontendexamsetu-l29okp8v0.vercel.app"     // production frontend
-  ],
-  credentials: true
-}));
+  origin: function (origin, callback) {
+    // allow requests with no origin (like Postman)
+    if (!origin) return callback(null, true);
 
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+app.options("*", cors());
 app.use(morgan('combined'));
-app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Static files for uploads
@@ -1821,6 +1832,7 @@ process.on('SIGINT', async () => {
 });
 
 module.exports = app;
+
 
 
 
