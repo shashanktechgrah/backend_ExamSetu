@@ -17,7 +17,7 @@ app.use(helmet());
 app.use(cors({
   origin: [
     "http://localhost:5173",          // local dev (Vite)
-    "https://examsetu.techgrah.com"     // production frontend
+    "https://frontendexamsetu-l29okp8v0.vercel.app"     // production frontend
   ],
   credentials: true
 }));
@@ -1821,6 +1821,7 @@ process.on('SIGINT', async () => {
 });
 
 module.exports = app;
+
 
 
 
