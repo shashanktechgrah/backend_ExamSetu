@@ -15,6 +15,16 @@ const allowedOrigins = [
   "http://localhost:5173",
   "https://frontendexamsetu-l29okp8v0.vercel.app"
 ];
+
+(async () => {
+  try {
+    await prisma.$connect();
+    console.log("✅ Prisma connected to database successfully");
+  } catch (err) {
+    console.error("❌ Prisma failed to connect:", err.message);
+  }
+})();
+
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(helmet());
@@ -1830,6 +1840,7 @@ process.on('SIGINT', async () => {
 });
 
 module.exports = app;
+
 
 
 
