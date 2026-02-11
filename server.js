@@ -13,7 +13,7 @@ const app = express();
 const prisma = new PrismaClient();
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://frontendexamsetu-l29okp8v0.vercel.app"
+  "https://frontendexamsetu-ibtkrqetp.vercel.app"
 ];
 
 (async () => {
@@ -1840,6 +1840,7 @@ process.on('SIGINT', async () => {
 });
 
 module.exports = app;
+
 
 
 
