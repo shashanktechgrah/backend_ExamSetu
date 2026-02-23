@@ -53,6 +53,135 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use('/uploads', express.static(uploadsDir));
 
+// Admin/Teacher results listing (mock + teacher-created)
+app.get('/api/admin/results', async (req, res) => {
+  try {
+    const classIdInt = req.query?.classId != null && String(req.query.classId).trim() !== '' ? parseInt(String(req.query.classId), 10) : null;
+    const sectionStr = req.query?.section != null && String(req.query.section).trim() !== '' ? String(req.query.section).trim() : null;
+    const subjectIdInt = req.query?.subjectId != null && String(req.query.subjectId).trim() !== '' ? parseInt(String(req.query.subjectId), 10) : null;
+    const testType = req.query?.testType != null && String(req.query.testType).trim() !== '' ? String(req.query.testType).trim().toUpperCase() : 'MOCK';
+
+    if (classIdInt != null && !Number.isFinite(classIdInt)) return res.status(400).json({ error: 'Invalid classId' });
+    if (subjectIdInt != null && !Number.isFinite(subjectIdInt)) return res.status(400).json({ error: 'Invalid subjectId' });
+
+    const where = {
+      test: {
+        ...(testType ? { testType } : {}),
+        ...(classIdInt ? { classId: classIdInt } : {}),
+        ...(subjectIdInt ? { subjectId: subjectIdInt } : {}),
+        ...(sectionStr ? { class: { section: sectionStr } } : {})
+      }
+    };
+
+    const attempts = await prisma.attempt.findMany({
+      where,
+      include: {
+        student: {
+          include: {
+            user: { select: { id: true, name: true, email: true, phone: true } },
+            class: { select: { id: true, className: true, section: true } }
+          }
+        },
+        test: {
+          include: {
+            subject: true,
+            class: true,
+            mockConfig: true
+          }
+        },
+        answers: true
+      },
+      orderBy: { startedAt: 'desc' },
+      take: 250
+    });
+
+    const userIds = attempts.map((a) => a.student?.user?.id).filter((v) => typeof v === 'number');
+    const photoLogs = userIds.length
+      ? await prisma.activityLog.findMany({
+          where: {
+            userId: { in: userIds },
+            module: 'PROFILE',
+            action: 'SET_PROFILE_PHOTO'
+          },
+          orderBy: { createdAt: 'desc' }
+        })
+      : [];
+
+    const photoByUserId = {};
+    for (const l of photoLogs) {
+      if (photoByUserId[l.userId]) continue;
+      const photo = l?.metadata?.profilePhoto;
+      if (photo && typeof photo === 'string') {
+        photoByUserId[l.userId] = photo;
+      }
+    }
+
+    const attemptIds = attempts.map((a) => a.id);
+    const attemptCounts = attemptIds.length
+      ? await prisma.attempt.groupBy({
+          by: ['studentId', 'testId'],
+          where: { id: { in: attemptIds } },
+          _count: { _all: true }
+        })
+      : [];
+    const timesByStudentTest = new Map(attemptCounts.map((g) => [`${g.studentId}:${g.testId}`, g._count._all]));
+
+    const mapped = attempts.map((a) => {
+      const totalQuestions = a.test?.mockConfig?.numberOfQuestions || null;
+      const attempted = (a.answers || []).filter((ans) => {
+        if (ans.selectedOptionId) return true;
+        if (ans.answerText && String(ans.answerText).trim() !== '') return true;
+        return false;
+      }).length;
+
+      const durationMin = a.test?.durationMin || 0;
+      const timeTakenSec = a.submittedAt ? Math.max(0, Math.floor((new Date(a.submittedAt).getTime() - new Date(a.startedAt).getTime()) / 1000)) : null;
+      const timeTakenMin = timeTakenSec != null ? Math.ceil(timeTakenSec / 60) : null;
+
+      const score = decimalToNumber(a.totalScore);
+      const percentage = decimalToNumber(a.percentage);
+
+      const userId = a.student?.user?.id || null;
+      const profilePhoto = userId && photoByUserId[userId] ? photoByUserId[userId] : null;
+      const timesGiven = timesByStudentTest.get(`${a.studentId}:${a.testId}`) || 1;
+
+      return {
+        attemptId: a.id,
+        testId: a.testId,
+        testType: a.test?.testType || null,
+        subjectId: a.test?.subjectId || null,
+        subject: a.test?.subject?.subjectName || null,
+        classId: a.test?.classId || null,
+        className: a.test?.class?.className || null,
+        section: a.test?.class?.section || null,
+        startedAt: a.startedAt,
+        submittedAt: a.submittedAt,
+        status: a.status,
+        score,
+        percentage,
+        totalQuestions,
+        questionsAttempted: attempted,
+        durationMin,
+        timeTakenMin,
+        timesGiven,
+        student: {
+          studentId: a.studentId,
+          userId,
+          name: a.student?.user?.name || null,
+          rollNo: a.student?.rollNo || null,
+          email: a.student?.user?.email || null,
+          phone: a.student?.user?.phone || null,
+          profilePhoto
+        }
+      };
+    });
+
+    res.json(mapped);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch results', details: error.message });
+  }
+});
+
 // Test database connection
 app.get('/api/test', async (req, res) => {
   try {
@@ -924,6 +1053,7 @@ app.post('/api/mock-tests/start', async (req, res) => {
       WHERE class_id = ${classId}
         AND subject_id = ${subjectRow.id}
         AND is_active = true
+        AND question_type = 'MCQ'
       ORDER BY RANDOM()
       LIMIT ${n}
     `;
@@ -956,8 +1086,8 @@ app.post('/api/mock-tests/start', async (req, res) => {
         durationMin += 1;
         mcqCount += 1;
       } else {
-        durationMin += 2;
-        subjectiveCount += 1;
+        //durationMin += 2;
+        //subjectiveCount += 1;
       }
       totalMarks += decimalToNumber(q.marks);
     }
@@ -1841,6 +1971,7 @@ process.on('SIGINT', async () => {
 });
 
 module.exports = app;
+
 
 
 
