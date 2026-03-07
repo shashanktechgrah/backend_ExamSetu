@@ -16,14 +16,18 @@ const allowedOrigins = [
   "https://examsetutechgrah.vercel.app"
 ];
 
-(async () => {
+async function connectPrisma() {
   try {
-    await prisma.$connect();
-    console.log("✅ Prisma connected to database successfully");
-  } catch (err) {
-    console.error("❌ Prisma failed to connect:", err.message);
+    await prisma.$connect()
+    console.log("✅ Prisma connected successfully")
+  } catch (error) {
+    console.error("❌ Prisma failed to connect:", error.message)
+
+    console.log("Retrying database connection in 5 seconds...")
+    setTimeout(connectPrisma, 5000)
   }
-})();
+}
+connectPrisma()
 
 // Middleware
 app.use(express.json({ limit: '10mb' }));
@@ -1971,6 +1975,7 @@ process.on('SIGINT', async () => {
 });
 
 module.exports = app;
+
 
 
 
